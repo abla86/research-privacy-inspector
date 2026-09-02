@@ -1,0 +1,18 @@
+﻿body {
+  width: 360px;
+  margin: 0;
+  padding: 16px;
+  font: 14px system-ui, sans-serif;
+}
+h1 { font-size: 18px; margin-top: 0; }
+.card {
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 10px;
+  margin-top: 10px;
+}
+.ok { font-weight: 600; }
+.warn { font-weight: 600; }
+dl { margin: 0; }
+dt { font-weight: 700; margin-top: 8px; }
+dd { margin-left: 0; overflow-wrap: anywhere; }
