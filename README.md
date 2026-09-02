@@ -1,33 +1,36 @@
-﻿# Research Privacy Inspector
+# Research Privacy Inspector
 
 Local-first Firefox WebExtension for research workflows.
 
-## MVP
+## What it does
 
-- DOI detection
-- Common citation metadata detection
-- Basic privacy/tracking indicators
-- Images missing alternative text
-- No external transmission of page content
-- Clear distinction between detected metadata and verified bibliographic truth
+- Detects DOI and common scholarly metadata locally.
+- Inspects basic privacy and accessibility signals.
+- Separates metadata detection from bibliographic verification.
+- Generates deterministic citation drafts without claiming source truth.
+- Keeps Norwegian legal references separate from ordinary journal APA formatting.
+- Uses a fail-closed model: incomplete metadata is not treated as a verified reference.
 
-## Principle
+## Architecture
 
-The extension fails closed: missing or unverified metadata must never be presented as a verified APA 7 reference.
+The `lib/` modules are pure ES modules with no DOM, browser, storage or network dependencies. The extension UI consumes the same deterministic logic that is tested independently.
+
+Online lookup is intentionally not part of the local inspection step. Future DOI/Crossref verification can be introduced as a separate explicit action with its own disclosure and permissions.
+
+## Firefox permissions
+
+The extension currently requests only `activeTab` and `scripting`, used for user-initiated inspection of the active page.
+
+## Quality gates
+
+```text
+npm test
+npm run lint
+npm run web-ext:lint
+```
 
 ## Status
 
-Prototype / MVP.
+Prototype / MVP progressing toward a research-grade utility.
 
 Not an official Mozilla product and not yet a Mozilla contribution.
-
-## Roadmap
-
-- Metadata normalization
-- APA 7 validation
-- Norwegian legal-source handling
-- Evidence Tool integration
-- Automated tests
-- Mozilla web-ext linting
-- Accessibility review
-- Privacy review
