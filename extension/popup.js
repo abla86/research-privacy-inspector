@@ -1,139 +1,80 @@
-﻿const status = document.querySelector("#status");
+const status = document.querySelector("#status");
 const result = document.querySelector("#result");
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, c => ({
-    "&":"&amp;",
-    "<":"&lt;",
-    ">":"&gt;",
-    '"':"&quot;",
-    "'":"&#39;"
+    "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
   }[c]));
 }
 
+function badge(label, value, tone = "ok") {
+  return `<div class="metric"><span>${escapeHtml(label)}</span><strong class="${tone}">${escapeHtml(value)}</strong></div>`;
+}
+
 function render(data) {
+  const p = data.page;
+  const privacy = data.privacy;
+  const a11y = data.accessibility;
+  const r = data.reference;
+  const trackingTone = privacy.trackingIndicatorCount > 0 ? "warn" : "ok";
+  const a11yIssues = a11y.missingAlt + a11y.buttonsWithoutName;
+
   result.innerHTML = `
-    <div class="card">
+    <section class="card">
+      <h2>Research metadata</h2>
       <dl>
-        <dt>Page</dt>
-        <dd>${escapeHtml(data.title || "Unknown")}</dd>
-
-        <dt>DOI</dt>
-        <dd>${escapeHtml(data.doi || "Not detected")}</dd>
-
-        <dt>Authors</dt>
-        <dd>${escapeHtml(data.authors || "Not detected")}</dd>
-
-        <dt>Publication date</dt>
-        <dd>${escapeHtml(data.date || "Not detected")}</dd>
-
-        <dt>External resources</dt>
-        <dd>${escapeHtml(data.externalCount)}</dd>
-
-        <dt>Images without alt text</dt>
-        <dd>${escapeHtml(data.imagesWithoutAlt)}</dd>
-
-        <dt>Tracking indicators</dt>
-        <dd>${escapeHtml(data.trackingIndicators)}</dd>
+        <dt>Title</dt><dd>${escapeHtml(p.title || "Not detected")}</dd>
+        <dt>Authors</dt><dd>${escapeHtml(p.authors || "Not detected")}</dd>
+        <dt>Date</dt><dd>${escapeHtml(p.publicationDate || "Not detected")}</dd>
+        <dt>Journal</dt><dd>${escapeHtml(p.journal || "Not detected")}</dd>
+        <dt>DOI</dt><dd>${escapeHtml(p.doi || "Not detected")}</dd>
       </dl>
-    </div>
+    </section>
 
-    <div class="card">
-      <strong>Privacy</strong>
-      <p class="${data.trackingIndicators ? "warn" : "ok"}">
-        ${data.trackingIndicators
-          ? "Potential tracking indicators detected."
-          : "No basic tracking indicators detected."}
-      </p>
-      <small>
-        No page content is sent to an external service by this extension.
-      </small>
-    </div>
+    <section class="card">
+      <h2>Reference integrity</h2>
+      ${badge("Metadata", r.metadataState)}
+      ${badge("Verification", "NOT VERIFIED", "warn")}
+      <p>${escapeHtml(r.note)}</p>
+      ${r.missingRequiredMetadata.length ? `<p class="warn">Missing: ${escapeHtml(r.missingRequiredMetadata.join(", "))}</p>` : ""}
+    </section>
 
-    <div class="card">
-      <strong>Reference status</strong>
-      <p>
-        ${escapeHtml(
-          data.doi
-            ? "DOI detected — metadata still requires verification."
-            : "Insufficient metadata for reliable citation generation."
-        )}
-      </p>
-    </div>
+    <section class="card">
+      <h2>Privacy signals</h2>
+      ${badge("External resources", privacy.externalResourceCount)}
+      ${badge("Tracking indicators", privacy.trackingIndicatorCount, trackingTone)}
+      ${privacy.trackingHosts.length ? `<p><strong>Detected hosts:</strong> ${escapeHtml(privacy.trackingHosts.join(", "))}</p>` : ""}
+      <p>No data is transmitted by the extension itself.</p>
+    </section>
+
+    <section class="card">
+      <h2>Accessibility signals</h2>
+      ${badge("Images without alt", a11y.missingAlt, a11y.missingAlt ? "warn" : "ok")}
+      ${badge("Unnamed buttons", a11y.buttonsWithoutName, a11y.buttonsWithoutName ? "warn" : "ok")}
+      ${badge("H1 elements", a11y.h1Count)}
+      ${badge("Main landmarks", a11y.mainCount)}
+      <p>${a11yIssues ? "Potential accessibility issues detected." : "No basic issues detected by this check."}</p>
+    </section>
   `;
 }
 
-browser.tabs.query({
-  active: true,
-  currentWindow: true
-}).then(async tabs => {
+(async () => {
+  try {
+    status.textContent = "Inspecting current page…";
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) throw new Error("No active tab");
 
-  const tab = tabs[0];
+    const results = await browser.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ["analyzer.js"]
+    });
 
-  if (!tab?.id) {
-    throw new Error("No active tab");
+    const data = results?.[0]?.result;
+    if (!data) throw new Error("No inspection result returned.");
+    render(data);
+    status.textContent = "Inspection complete";
+  } catch (error) {
+    status.textContent = "This page cannot be inspected.";
+    result.innerHTML = `<section class="card"><strong>${escapeHtml(error.message)}</strong></section>`;
   }
-
-  const results = await browser.scripting.executeScript({
-    target: { tabId: tab.id },
-
-    func: () => {
-
-      const meta = name =>
-        document.querySelector(`meta[name="${name}"]`)?.content ||
-        document.querySelector(`meta[property="${name}"]`)?.content ||
-        "";
-
-      const doiMatch =
-        document.body?.innerText?.match(
-          /\b10\.\d{4,9}\/[-._;()/:A-Z0-9]+\b/i
-        );
-
-      const external = [
-        ...document.querySelectorAll(
-          "script[src],img[src],iframe[src],link[href]"
-        )
-      ];
-
-      const tracking = [
-        ...document.querySelectorAll(
-          "script[src],img[src],iframe[src]"
-        )
-      ].filter(el => {
-
-        const u = el.src || "";
-
-        return /google-analytics|googletagmanager|doubleclick|facebook\.net|hotjar|matomo|clarity\.ms/i.test(u);
-
-      }).length;
-
-      return {
-        title: document.title,
-        doi: meta("citation_doi") || doiMatch?.[0] || "",
-        authors: meta("citation_author") || meta("author"),
-        date:
-          meta("citation_publication_date") ||
-          meta("article:published_time"),
-
-        externalCount: external.length,
-
-        imagesWithoutAlt:
-          [...document.images]
-            .filter(img => !img.hasAttribute("alt"))
-            .length,
-
-        trackingIndicators: tracking
-      };
-    }
-  });
-
-  render(results[0].result);
-
-  status.textContent = "Inspection complete";
-
-}).catch(error => {
-
-  status.textContent = "This page cannot be inspected.";
-  result.textContent = error.message;
-
-});
+})();
