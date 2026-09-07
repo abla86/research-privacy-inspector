@@ -1,3 +1,4 @@
+/* global navigator */
 const status = document.querySelector("#status");
 const result = document.querySelector("#result");
 
