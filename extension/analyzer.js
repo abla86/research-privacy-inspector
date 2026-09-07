@@ -40,6 +40,7 @@ function isValidDoi(raw) {
   return /^10\.\d{4,9}\/[-._;()/:A-Z0-9]+$/i.test(normalizeDoi(raw));
 }
 
+/* global URL */
 function canonicalUrl(raw) {
   if (!raw) return "";
   try { return new URL(raw, location.href).href; } catch { return ""; }
